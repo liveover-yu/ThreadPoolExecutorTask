@@ -1,8 +1,4 @@
-# ThreadPoolExecutorTask
-
-这是一个 Java 手写线程池练习项目，重点实现线程池的核心调度逻辑，并通过功能测试、压力测试和对比测试说明实现边界。
-
-## 已实现能力
+## ThreadPoolExecutorTask
 
 - 支持 `corePoolSize` 和 `maximumPoolSize`
 - 支持有界任务队列 `queueCapacity`
@@ -178,7 +174,6 @@ blackhole = value;
 
 ## CpuSustainedBenchmark：5分钟 CPU 持续压测
 
-老师提到“没有持续压测看不出来性能差别”，因此新增 `CpuSustainedBenchmark`。
 
 默认配置：
 
