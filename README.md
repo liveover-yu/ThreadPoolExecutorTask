@@ -1,32 +1,41 @@
-## 更新说明
+# ThreadPoolExecutorTask
 
-- 支持 `corePoolSize` / `maximumPoolSize`
-- 支持有界任务队列和拒绝策略
+这是一个 Java 手写线程池练习项目，重点实现线程池的核心调度逻辑，并通过功能测试、压力测试和对比测试说明实现边界。
+
+## 已实现能力
+
+- 支持 `corePoolSize` 和 `maximumPoolSize`
+- 支持有界任务队列 `queueCapacity`
+- 支持自定义拒绝策略 `RejectPolicy`
 - 支持非核心线程空闲超时退出
-- 支持统计当前worker数量和活跃线程数量
 - 支持 `shutdown()`、`shutdownNow()` 和 `awaitTermination(timeout)`
-- worker 执行任务时会捕获异常，避免任务异常导致线程退出
-
-修改后的实现覆盖了线程池创建、任务提交、队列缓存、扩容、拒绝、关闭和超时回收等核心流程。
-
-## 测试说明
-
-`PressureTest` 主要用于验证线程池在高任务提交压力下的调度边界，不作为严格性能基准测试。
-
-测试任务使用 `Thread.sleep(...)` 模拟耗时等待，因此属于 **I/O 等待型任务模拟**，不是计算密集型任务。测试结果主要用于验证线程池调度逻辑、容量边界和关闭流程，不代表 CPU 密集型任务性能。
-
-`BenchmarkTest` 用于补充 I/O 等待型和 CPU 密集型任务测试，并与 JUC 官方 `ThreadPoolExecutor` 在相同参数下进行对比。
+- 支持统计当前 worker 数量和活跃线程数量
+- worker 执行任务时会捕获异常，避免单个任务异常直接杀死 worker
 
 ## 运行环境
 
 ```text
 OS: Microsoft Windows NT 10.0.26200.0
 CPU: AMD Ryzen 9 8940HX with Radeon Graphics
+CPU物理核心数: 16
+CPU逻辑处理器数: 32
 JDK: Java 24.0.2
 运行方式: IntelliJ IDEA / 本地 JVM
 ```
 
-测试重点包括：
+## 测试文件说明
+
+```text
+Main.java                  功能演示：扩容、拒绝、活跃线程统计、shutdownNow
+PressureTest.java          调度边界测试：容量边界、持续提交压力
+BenchmarkTest.java         短轮次对比测试：自定义线程池 vs JUC 官方线程池
+CpuSustainedBenchmark.java 5分钟 CPU 持续压测：定时采样并输出 CSV
+scripts/plot_benchmark.py  根据 CSV 生成折线图
+```
+
+## PressureTest：调度边界测试
+
+`PressureTest` 不是严格性能基准测试，主要用于验证线程池调度逻辑：
 
 - `maximumPoolSize` 是否限制最大 worker 数量
 - `queueCapacity` 是否限制等待队列长度
@@ -35,13 +44,9 @@ JDK: Java 24.0.2
 - `activeCount` 是否能反映当前活跃线程数
 - 线程池是否能正常关闭
 
----
+### 容量边界测试
 
-## 容量边界测试
-
-该测试会瞬时提交大量任务，用于验证线程池的最大接收能力。
-
-### 测试配置
+配置：
 
 ```text
 corePoolSize = 2
@@ -57,41 +62,29 @@ taskSleepMillis = 100
 I/O 等待模拟任务：Thread.sleep(100ms)
 ```
 
-### 理论预期
-
-线程池最多可以同时接收：
+理论最大接收任务数：
 
 ```text
 maximumPoolSize + queueCapacity = 4 + 100 = 104
 ```
 
-其中：
-
-- `4` 个任务由 worker 执行
-- `100` 个任务进入等待队列
-- 其余任务触发拒绝策略
-
-104 个已接收任务由 4 个 worker 并行执行，理论执行批次数为：
+理论执行批次数：
 
 ```text
 ceil(104 / 4) = 26
 ```
 
-单任务等待时间为 `100ms`，因此理论执行耗时约为：
+理论执行耗时：
 
 ```text
 26 * 100ms = 2600ms
 ```
 
-### 测试结果示例
+示例结果：
 
 ```text
 提交任务数: 1000
-任务类型: I/O等待模拟任务
-任务内容: Thread.sleep(100ms)
 理论最大接收任务数: 104
-理论执行批次数: 26
-理论执行耗时 ms: 2600
 实际接收任务数: 104
 提交后 worker 数量: 4
 提交后活跃线程数: 4
@@ -103,26 +96,11 @@ ceil(104 / 4) = 26
 已接收任务完成耗时 ms: 2621
 ```
 
-### 结果说明
+结论：瞬时提交 1000 个任务时，自定义线程池最多接收 `104` 个任务，其余任务触发拒绝策略，符合容量边界预期。
 
-测试结果符合预期：
+### 持续压力测试
 
-```text
-实际接收任务数 = 104
-拒绝任务数 = 896
-实际完成任务数 + 拒绝任务数 = 1000
-理论执行耗时约 2600ms，实际完成耗时约 2621ms
-```
-
-说明线程池在瞬时高压提交下，能够正确限制最大线程数和队列容量，并触发拒绝策略。
-
----
-
-## 持续压力测试
-
-该测试会按照固定间隔持续提交任务，用于验证线程池在持续压力下能否边执行边接收任务。
-
-### 测试配置
+配置：
 
 ```text
 corePoolSize = 2
@@ -139,15 +117,13 @@ submitIntervalMillis = 5
 I/O 等待模拟任务：Thread.sleep(50ms)
 ```
 
-### 压力说明
-
-任务提交速率约为：
+提交速率约为：
 
 ```text
 1000 / 5 = 200 tasks/s
 ```
 
-线程池最大处理能力约为：
+最大处理能力约为：
 
 ```text
 maximumPoolSize * 1000 / taskSleepMillis
@@ -155,48 +131,11 @@ maximumPoolSize * 1000 / taskSleepMillis
 = 80 tasks/s
 ```
 
-该处理能力是基于 `Thread.sleep(50ms)` 的等待时间估算，用于解释测试压力来源，不代表 CPU 计算能力。
+说明：这个处理能力是基于 `Thread.sleep(50ms)` 的等待时间估算，用于解释压力来源，不代表 CPU 计算性能。
 
-由于提交速率高于处理能力，因此会产生队列堆积，并触发部分任务拒绝。
+## BenchmarkTest：与 JUC 官方线程池短轮次对比
 
-### 测试结果示例
-
-```text
-提交任务数: 300
-任务类型: I/O等待模拟任务
-任务内容: Thread.sleep(50ms)
-提交间隔 ms: 5
-估算提交速率 tasks/s: 200
-估算最大处理能力 tasks/s: 80
-说明: 最大处理能力基于 sleep 等待时间估算，不代表 CPU 计算性能
-提交后 worker 数量: 4
-提交后活跃线程数: 4
-实际接收任务数: 206
-拒绝任务数: 94
-实际开始执行任务数: 206
-实际完成任务数: 206
-完成 + 拒绝: 300
-线程池是否正常结束: true
-已接收任务完成耗时 ms: 2992
-```
-
-### 结果说明
-
-测试结果符合预期：
-
-```text
-实际完成任务数 + 拒绝任务数 = 300
-```
-
-相比容量边界测试，持续压力测试中 worker 会在提交过程中不断消费任务，因此实际接收任务数高于瞬时容量上限 `104`。
-
-该测试说明线程池能够在持续压力下保持最大线程数限制、执行已接收任务，并在关闭时正常退出。
-
----
-
-## BenchmarkTest：与 JUC 官方线程池对比
-
-`BenchmarkTest` 在相同线程池参数下，对比自定义线程池和 JUC 官方 `ThreadPoolExecutor`。
+`BenchmarkTest` 用相同参数对比自定义线程池和 JUC 官方 `ThreadPoolExecutor`。
 
 通用配置：
 
@@ -208,91 +147,168 @@ totalTasks = 1000
 rounds = 5
 ```
 
----
+### I/O 等待型任务
 
-### I/O 等待型任务对比
-
-任务类型：
+任务内容：
 
 ```text
-I/O 等待型任务：Thread.sleep(100ms)
+Thread.sleep(100ms)
 ```
 
-测试结果示例：
+该测试用于观察等待型任务下，两种线程池在相同参数、相同拒绝条件下的完成数、拒绝数和耗时差异。
 
-| 线程池实现 | 轮次 | 完成任务数 | 拒绝任务数 | 耗时(ms) | 是否正常结束 |
-|---|---:|---:|---:|---:|---|
-| 自定义线程池 | 1 | 104 | 896 | 2619 | true |
-| JUC官方线程池 | 1 | 104 | 896 | 2619 | true |
-| 自定义线程池 | 2 | 104 | 896 | 2620 | true |
-| JUC官方线程池 | 2 | 104 | 896 | 2619 | true |
-| 自定义线程池 | 3 | 104 | 896 | 2620 | true |
-| JUC官方线程池 | 3 | 104 | 896 | 2615 | true |
-| 自定义线程池 | 4 | 104 | 896 | 2621 | true |
-| JUC官方线程池 | 4 | 104 | 896 | 2615 | true |
-| 自定义线程池 | 5 | 104 | 896 | 2620 | true |
-| JUC官方线程池 | 5 | 104 | 896 | 2619 | true |
+### CPU 密集型任务
 
-平均耗时：
+任务内容：
 
-```text
-自定义线程池平均耗时(ms): 2620
-JUC官方线程池平均耗时(ms): 2617
+```java
+double value = 0.0;
+for (int i = 0; i < loopCount; i++) {
+    double x = i * 0.0007;
+    value += Math.sin(x) * Math.cos(x) + Math.sqrt(Math.abs(x));
+}
+blackhole = value;
 ```
 
 说明：
 
-- 两种线程池完成任务数和拒绝任务数一致
-- I/O 等待型任务主要耗时来自 `sleep` 等待，两者平均耗时接近
-- 该测试用于观察相同等待型任务下的调度行为，不代表 CPU 计算性能
+- 使用 `Math.sin`、`Math.cos`、`Math.sqrt`、`Math.abs` 模拟 CPU 计算任务
+- 计算结果写入 `volatile` 变量 `blackhole`，减少 JVM 将计算优化掉的可能
+- CPU 密集型耗时会受 CPU 负载、JIT 编译、线程调度影响，短轮次结果可能波动
 
----
+## CpuSustainedBenchmark：5分钟 CPU 持续压测
 
-### CPU 密集型任务对比
+老师提到“没有持续压测看不出来性能差别”，因此新增 `CpuSustainedBenchmark`。
 
-该测试用于补充计算密集型场景。
+默认配置：
 
 ```text
-CPU_LOOP_COUNT = 20000000
+CPU: AMD Ryzen 9 8940HX with Radeon Graphics
+CPU物理核心数: 16
+CPU逻辑处理器数: 32
+corePoolSize = 16
+maximumPoolSize = 16
+queueCapacity = 10000
+backlogLimit = 2000
+durationSeconds = 300
+sampleIntervalMillis = 1000
+cpuLoopCount = 200000
 ```
 
 任务类型：
 
 ```text
-CPU 密集型任务：循环累加计算
+CPU 密集型任务：Math.sin / Math.cos / Math.sqrt / Math.abs
 ```
 
-为避免计算结果被 JVM 过度优化，测试中使用 `volatile` 变量接收计算结果。
-
-测试结果示例：
-
-| 线程池实现 | 轮次 | 完成任务数 | 拒绝任务数 | 耗时(ms) | 是否正常结束 |
-|---|---:|---:|---:|---:|---|
-| 自定义线程池 | 1 | 104 | 896 | 122 | true |
-| JUC官方线程池 | 1 | 104 | 896 | 114 | true |
-| 自定义线程池 | 2 | 104 | 896 | 114 | true |
-| JUC官方线程池 | 2 | 104 | 896 | 112 | true |
-| 自定义线程池 | 3 | 104 | 896 | 111 | true |
-| JUC官方线程池 | 3 | 104 | 896 | 111 | true |
-| 自定义线程池 | 4 | 104 | 896 | 112 | true |
-| JUC官方线程池 | 4 | 104 | 896 | 111 | true |
-| 自定义线程池 | 5 | 104 | 896 | 113 | true |
-| JUC官方线程池 | 5 | 104 | 896 | 112 | true |
-
-平均耗时：
+对比对象：
 
 ```text
-自定义线程池平均耗时(ms): 114
-JUC官方线程池平均耗时(ms): 112
+custom: 自定义 ThreadPoolExecutorPractice
+juc:    JUC 官方 ThreadPoolExecutor
 ```
 
-结果说明：
+`backlogLimit` 是压测器自己的背压阈值，不是线程池参数。它的作用是让队列持续保持压力，但避免提交线程长时间制造无意义的拒绝任务，从而影响 CPU 吞吐对比。
 
-在相同线程池参数、相同任务数量和相同 CPU 密集型任务下：
+CPU 密集型压测使用 `corePoolSize = maximumPoolSize = 16`，对应本机 16 个物理核心。这样做的原因是计算密集型任务主要消耗 CPU，线程数超过物理核心后不一定提升吞吐，反而可能增加上下文切换。
 
-- 自定义线程池与 JUC 官方线程池接收任务数一致，均为 `104`
-- 拒绝任务数一致，均为 `896`
-- 两者都能正常关闭
-- JUC 官方线程池平均耗时略低，符合预期
+运行方式：
 
-CPU 密集型任务耗时会受到 CPU 负载、JIT 编译、线程调度和本机运行环境影响，因此单轮结果可能波动。本测试主要用于观察相同条件下的行为差异，不作为严格性能基准测试。
+```text
+运行 com.example.threadpoolexecutortask.CpuSustainedBenchmark
+```
+
+默认会压测 300 秒。如果只想快速检查程序能否运行，可以传入秒数，例如：
+
+```text
+CpuSustainedBenchmark 5
+```
+
+输出文件：
+
+```text
+benchmark-results/cpu-sustained.csv
+```
+
+CSV 字段：
+
+```text
+second       第几秒采样
+poolType     custom 或 juc
+submitted    累计提交任务数
+accepted     累计接收任务数，等于 submitted - rejected
+finished     累计完成任务数
+rejected     累计拒绝任务数
+throughput   当前采样周期内完成的任务数
+poolSize     当前 worker 数量
+activeCount  当前活跃线程数量
+```
+
+## CPU 持续压测折线图
+
+以下图片由 `scripts/plot_benchmark.py` 根据 `benchmark-results/cpu-sustained.csv` 自动生成。
+
+### 每秒完成任务数
+
+![CPU throughput](benchmark-results/cpu-throughput.svg)
+
+### 累计完成任务数
+
+![CPU finished](benchmark-results/cpu-finished.svg)
+
+### 活跃线程数
+
+![CPU active count](benchmark-results/cpu-active-count.svg)
+
+### 拒绝任务数
+
+![CPU rejected](benchmark-results/cpu-rejected.svg)
+
+## 生成折线图
+
+项目提供了 `scripts/plot_benchmark.py`。
+
+如果本机安装了 `matplotlib`，脚本会输出 PNG：
+
+```text
+pip install matplotlib
+```
+
+如果没有安装 `matplotlib`，脚本会自动退回生成 SVG 图片。
+
+运行：
+
+```text
+python scripts/plot_benchmark.py
+```
+
+输出图片：
+
+```text
+benchmark-results/cpu-throughput.svg
+benchmark-results/cpu-finished.svg
+benchmark-results/cpu-active-count.svg
+benchmark-results/cpu-rejected.svg
+benchmark-results/cpu-throughput.png
+benchmark-results/cpu-finished.png
+benchmark-results/cpu-active-count.png
+benchmark-results/cpu-rejected.png
+```
+
+SVG 会固定生成并被 README 引用。如果安装了 `matplotlib`，会额外生成 PNG。
+
+图表用途：
+
+- `cpu-throughput.png`：观察每秒完成任务数，比较自定义线程池和 JUC 的吞吐走势
+- `cpu-finished.png`：观察累计完成任务数
+- `cpu-active-count.png`：观察活跃线程数是否稳定接近 16 个工作线程
+- `cpu-rejected.png`：观察持续压力下拒绝任务增长情况
+
+## 结果解释口径
+
+这个项目的压测目标不是证明自定义线程池性能超过 JUC，而是说明：
+
+- 自定义线程池在容量边界、拒绝策略、扩容、关闭、活跃线程统计方面行为正确
+- 在相同参数下，可以和 JUC 官方线程池进行可复现的对比
+- I/O 等待型任务和 CPU 密集型任务需要分开说明
+- 短轮次测试只能看基本行为，5分钟持续压测更适合观察吞吐走势和稳定性
