@@ -1,4 +1,6 @@
 package com.example.threadpoolexecutortask;
 
-public class RejectPolicy {
+@FunctionalInterface
+public interface RejectPolicy {
+    void reject(Runnable task);
 }
