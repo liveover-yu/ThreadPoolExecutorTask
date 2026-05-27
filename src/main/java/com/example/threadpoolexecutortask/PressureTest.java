@@ -50,6 +50,8 @@ public class PressureTest {
         Thread.sleep(50);
 
         int expectedAccepted = maximumPoolSize + queueCapacity;
+        int expectedBatches = (int) Math.ceil((double) expectedAccepted / maximumPoolSize);
+        int expectedExecutionMillis = expectedBatches * taskSleepMillis;
         int observedPoolSize = pool.getPoolSize();
         int observedActiveCount = pool.getActiveCount();
         int rejectedBeforeShutdown = rejectedCount.get();
@@ -59,7 +61,11 @@ public class PressureTest {
         System.out.println("maximumPoolSize: " + maximumPoolSize);
         System.out.println("queueCapacity: " + queueCapacity);
         System.out.println("提交任务数: " + totalTasks);
+        System.out.println("任务类型: I/O等待模拟任务");
+        System.out.println("任务内容: Thread.sleep(" + taskSleepMillis + "ms)");
         System.out.println("理论最大接收任务数: " + expectedAccepted);
+        System.out.println("理论执行批次数: " + expectedBatches);
+        System.out.println("理论执行耗时 ms: " + expectedExecutionMillis);
         System.out.println("实际接收任务数: " + acceptedCount);
         System.out.println("提交后 worker 数量: " + observedPoolSize);
         System.out.println("提交后活跃线程数: " + observedActiveCount);
@@ -75,7 +81,7 @@ public class PressureTest {
         System.out.println("完成 + 拒绝: " + (finishedCount.get() + rejectedCount.get()));
         System.out.println("最终 worker 数量: " + pool.getPoolSize());
         System.out.println("线程池是否正常结束: " + terminated);
-        System.out.println("总耗时 ms: " + (endTime - startTime));
+        System.out.println("已接收任务完成耗时 ms: " + (endTime - startTime));
 
         System.out.println("校验-实际接收数等于理论接收数: " + pass(acceptedCount == expectedAccepted));
         System.out.println("校验-开始执行数等于接收数: " + pass(startedCount.get() == acceptedCount));
@@ -132,9 +138,12 @@ public class PressureTest {
         System.out.println("maximumPoolSize: " + maximumPoolSize);
         System.out.println("queueCapacity: " + queueCapacity);
         System.out.println("提交任务数: " + totalTasks);
+        System.out.println("任务类型: I/O等待模拟任务");
+        System.out.println("任务内容: Thread.sleep(" + taskSleepMillis + "ms)");
         System.out.println("提交间隔 ms: " + submitIntervalMillis);
         System.out.println("估算提交速率 tasks/s: " + estimatedSubmitRate);
         System.out.println("估算最大处理能力 tasks/s: " + estimatedWorkerCapacity);
+        System.out.println("说明: 最大处理能力基于 sleep 等待时间估算，不代表 CPU 计算性能");
         System.out.println("说明: 提交速率高于最大处理能力，用于制造持续压力");
 
         int observedPoolSize = pool.getPoolSize();
@@ -157,7 +166,7 @@ public class PressureTest {
         System.out.println("完成 + 拒绝: " + (finishedCount.get() + rejectedCount.get()));
         System.out.println("最终 worker 数量: " + pool.getPoolSize());
         System.out.println("线程池是否正常结束: " + terminated);
-        System.out.println("总耗时 ms: " + (endTime - startTime));
+        System.out.println("已接收任务完成耗时 ms: " + (endTime - startTime));
 
         System.out.println("校验-开始执行数等于接收数: " + pass(startedCount.get() == acceptedCount));
         System.out.println("校验-完成数等于接收数: " + pass(finishedCount.get() == acceptedCount));
