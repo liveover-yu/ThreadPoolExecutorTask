@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="520" viewBox="0 0 1000 520">
 <rect width="100%" height="100%" fill="white"/>
-<text x="500.0" y="30" text-anchor="middle" font-size="22" font-family="Arial">CPU rejected tasks</text>
+<text x="500.0" y="30" text-anchor="middle" font-size="22" font-family="Arial">CPU throughput moving average (5s)</text>
 <line x1="80" y1="60" x2="80" y2="450" stroke="#111827" stroke-width="1"/>
 <line x1="80" y1="450" x2="970" y2="450" stroke="#111827" stroke-width="1"/>
 <text x="500.0" y="500" text-anchor="middle" font-size="14" font-family="Arial">measure time (s)</text>
-<text x="22" y="260.0" text-anchor="middle" transform="rotate(-90 22 260.0)" font-size="14" font-family="Arial">rejected tasks</text>
+<text x="22" y="260.0" text-anchor="middle" transform="rotate(-90 22 260.0)" font-size="14" font-family="Arial">finished tasks / second</text>
 <text x="70" y="455" text-anchor="end" font-size="12" font-family="Arial">0</text>
-<text x="70" y="65" text-anchor="end" font-size="12" font-family="Arial">1</text>
-<polyline fill="none" stroke="#2563eb" stroke-width="2" points="80.00,450.00 302.50,450.00 525.00,450.00 747.50,450.00 970.00,450.00"/>
+<text x="70" y="65" text-anchor="end" font-size="12" font-family="Arial">3704</text>
+<polyline fill="none" stroke="#2563eb" stroke-width="2" points="80.00,60.00 302.50,63.47 525.00,64.28 747.50,64.79 970.00,65.73"/>
 <rect x="90" y="70" width="14" height="14" fill="#2563eb"/>
 <text x="112" y="82" font-size="14" font-family="Arial">custom</text>
-<polyline fill="none" stroke="#f97316" stroke-width="2" points="80.00,450.00 302.50,450.00 525.00,450.00 747.50,450.00 970.00,450.00"/>
+<polyline fill="none" stroke="#f97316" stroke-width="2" points="80.00,68.74 302.50,69.27 525.00,68.74 747.50,67.71 970.00,67.60"/>
 <rect x="90" y="94" width="14" height="14" fill="#f97316"/>
 <text x="112" y="106" font-size="14" font-family="Arial">juc</text>
 </svg>

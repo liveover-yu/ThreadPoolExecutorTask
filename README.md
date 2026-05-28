@@ -1,5 +1,17 @@
 ## ThreadPoolExecutorTask
 
+## 更新公告：CPU 压测方法调整
+
+针对“吞吐量图出现突增和骤降，需要调查原因”的问题，已对 CPU 持续压测方法做了调整：
+
+- 旧方法是先连续运行 custom 300 秒，再连续运行 JUC 300 秒，容易受到 JIT 预热、CPU 睿频/降频、Windows 调度和后台负载影响。
+- 新方法改为“预热 + 多轮交替测试”：每轮先分别预热 custom 和 JUC，预热数据不进入图表；正式测量阶段再交替运行 custom 和 JUC。
+- CSV 新增 `round` 和 `phase` 字段，只把 `phase = measure` 的数据用于画图。
+- 图表新增 5 秒移动平均吞吐图，用来减少单秒采样抖动带来的误读。
+- 新增 `benchmark-results/cpu-summary.md`，汇总每种线程池的平均吞吐、最大/最小吞吐和拒绝数量。
+
+## 项目简介
+
 - 支持 `corePoolSize` 和 `maximumPoolSize`
 - 支持有界任务队列 `queueCapacity`
 - 支持自定义拒绝策略 `RejectPolicy`
@@ -25,8 +37,8 @@ JDK: Java 24.0.2
 Main.java                  功能演示：扩容、拒绝、活跃线程统计、shutdownNow
 PressureTest.java          调度边界测试：容量边界、持续提交压力
 BenchmarkTest.java         短轮次对比测试：自定义线程池 vs JUC 官方线程池
-CpuSustainedBenchmark.java 5分钟 CPU 持续压测：定时采样并输出 CSV
-scripts/plot_benchmark.py  根据 CSV 生成折线图
+CpuSustainedBenchmark.java CPU 持续压测：预热、交替多轮、定时采样并输出 CSV
+scripts/plot_benchmark.py  根据 CSV 生成折线图和 summary
 ```
 
 ## PressureTest：调度边界测试
@@ -172,7 +184,7 @@ blackhole = value;
 - 计算结果写入 `volatile` 变量 `blackhole`，减少 JVM 将计算优化掉的可能
 - CPU 密集型耗时会受 CPU 负载、JIT 编译、线程调度影响，短轮次结果可能波动
 
-## CpuSustainedBenchmark：5分钟 CPU 持续压测
+## CpuSustainedBenchmark：CPU 持续压测
 
 
 默认配置：
@@ -185,7 +197,9 @@ corePoolSize = 16
 maximumPoolSize = 16
 queueCapacity = 10000
 backlogLimit = 2000
-durationSeconds = 300
+warmupSecondsPerPoolPerRound = 20
+measureSecondsPerPoolPerRound = 60
+rounds = 3
 sampleIntervalMillis = 1000
 cpuLoopCount = 200000
 ```
@@ -207,16 +221,23 @@ juc:    JUC 官方 ThreadPoolExecutor
 
 CPU 密集型压测使用 `corePoolSize = maximumPoolSize = 16`，对应本机 16 个物理核心。这样做的原因是计算密集型任务主要消耗 CPU，线程数超过物理核心后不一定提升吞吐，反而可能增加上下文切换。
 
+压测方法：
+
+- 每轮先分别预热 custom 和 JUC，预热数据不进入最终图表
+- 正式测试采用多轮交替执行，降低单次顺序压测带来的偏差
+- 图表同时保留原始每秒吞吐和 5 秒移动平均吞吐
+- 该方法仍然不是严格工业级基准测试，但比单次顺序压测更容易解释
+
 运行方式：
 
 ```text
 运行 com.example.threadpoolexecutortask.CpuSustainedBenchmark
 ```
 
-默认会压测 300 秒。如果只想快速检查程序能否运行，可以传入秒数，例如：
+默认执行 3 轮，每轮 custom 和 JUC 各预热 20 秒、正式压测 60 秒。如果只想快速检查程序能否运行，可以传入轮数和每轮正式压测秒数，例如：
 
 ```text
-CpuSustainedBenchmark 5
+CpuSustainedBenchmark 1 5
 ```
 
 输出文件：
@@ -228,8 +249,10 @@ benchmark-results/cpu-sustained.csv
 CSV 字段：
 
 ```text
+round        第几轮测试
 second       第几秒采样
 poolType     custom 或 juc
+phase        measure 表示正式测量数据
 submitted    累计提交任务数
 accepted     累计接收任务数，等于 submitted - rejected
 finished     累计完成任务数
@@ -247,6 +270,10 @@ activeCount  当前活跃线程数量
 
 ![CPU throughput](benchmark-results/cpu-throughput.svg)
 
+### 每秒完成任务数：5秒移动平均
+
+![CPU throughput moving average](benchmark-results/cpu-throughput-ma.svg)
+
 ### 累计完成任务数
 
 ![CPU finished](benchmark-results/cpu-finished.svg)
@@ -259,3 +286,8 @@ activeCount  当前活跃线程数量
 
 ![CPU rejected](benchmark-results/cpu-rejected.svg)
 
+## 关于吞吐突增/骤降的说明
+
+早期图表出现突增和骤降，主要不是因为线程池 worker 数量变化，也不是因为拒绝任务，因为当时 `activeCount` 基本稳定，`rejected = 0`。更可能的原因是测试方法本身：custom 和 JUC 顺序执行，容易受到 JIT、CPU 频率变化、系统调度和后台负载影响；同时 1 秒粒度采样会放大短时波动。
+
+当前版本通过预热、多轮交替测试和 5 秒移动平均图降低这种误差。原始每秒吞吐仍可用于观察细节，移动平均图更适合判断整体趋势。
